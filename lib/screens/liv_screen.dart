@@ -1,0 +1,107 @@
+import 'package:flutter/material.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import 'cday.dart';  // Assure-toi d'avoir la page Cday importée
+import 'qr_screen.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: HomeScreen(),
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _pages = [
+    SubscriptionScreen(),
+    Center(child: Text('Panier', style: TextStyle(fontSize: 24))),
+    Center(child: Text('Profil', style: TextStyle(fontSize: 24))),
+    DayPickerPage(), // Redirection vers la page Cday
+    QrScreen(),
+  ];
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          _pages[_selectedIndex], // Page correspondante
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: BottomNavigationBar(
+              items: const <BottomNavigationBarItem>[
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
+                BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Panier'),
+                BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
+                BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Tour'),  // "Tour" icône
+                BottomNavigationBarItem(icon: Icon(Icons.qr_code), label: 'QR'),
+              ],
+              currentIndex: _selectedIndex, // Indicateur de page active
+              selectedItemColor: Colors.green,
+              onTap: _onItemTapped,  // Fonction pour changer de page
+              type: BottomNavigationBarType.fixed,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SubscriptionScreen extends StatelessWidget {
+  final List<String> subscriptions = [
+    'Abonnement Classique',
+    'Abonnement Bio',
+    'Abonnement Premium',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Choisissez votre abonnement')),
+      body: Column(
+        children: [
+          CarouselSlider(
+            options: CarouselOptions(height: 200, autoPlay: true),
+            items: subscriptions.map((plan) {
+              return Builder(
+                builder: (BuildContext context) {
+                  return Container(
+                    width: MediaQuery.of(context).size.width,
+                    margin: EdgeInsets.symmetric(horizontal: 5.0),
+                    decoration: BoxDecoration(color: Colors.greenAccent),
+                    child: Center(
+                      child: Text(
+                        plan,
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
