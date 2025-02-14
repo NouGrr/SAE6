@@ -65,16 +65,16 @@ class TourMapScreen extends StatefulWidget {
 
 class _TourMapScreenState extends State<TourMapScreen> {
   LatLng? _center;
+  late final MapController _mapController;
   List<Marker> _markers = [];
   List<LatLng> _routePoints = [];
-  final String _apiKey = '5b3ce3597851110001cf62488a9cdb2b0326420399c4bbfc720bcf99';
   LatLng? _currentPosition;
   bool _isLoading = true;
   Timer? _locationTimer;
 
   @override
   void initState() {
-    super.initState();
+    _mapController = MapController();
     _getCurrentLocation();
     _loadAllRoutes();
     _startLocationUpdates();
@@ -110,6 +110,9 @@ class _TourMapScreenState extends State<TourMapScreen> {
           .where((json) => json['adresses'] != null)
           .map((json) => DeliveryPoint.fromJson(json))
           .toList();
+
+        // Trier les points de livraison par depotId
+        deliveryPoints.sort((a, b) => a.depotId.compareTo(b.depotId));
         
         setState(() {
           _routePoints = deliveryPoints
@@ -219,44 +222,98 @@ class _TourMapScreenState extends State<TourMapScreen> {
   Future<void> _generateRoute() async {
     if (_currentPosition == null || _routePoints.isEmpty) return;
 
-    List<List<double>> coordinates = [
-      [_currentPosition!.longitude, _currentPosition!.latitude],
-      ..._routePoints.map((m) => [m.longitude, m.latitude]).toList(),
+    List<LatLng> fullRoute = [];
+    List<LatLng> orderedPoints = [
+      _currentPosition!,
+      ..._routePoints,
     ];
 
-    String url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+    for (int i = 0; i < orderedPoints.length - 1; i++) {
+      String url = 'https://router.project-osrm.org/route/v1/driving/'
+          '${orderedPoints[i].longitude},${orderedPoints[i].latitude};'
+          '${orderedPoints[i + 1].longitude},${orderedPoints[i + 1].latitude}'
+          '?overview=full&geometries=polyline';
 
-    var body = jsonEncode({
-      "coordinates": coordinates,
-      "instructions": false,
-      "elevation": false,
-      "geometry_simplify": false
-    });
+      try {
+        final response = await http.get(Uri.parse(url));
 
-    try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          "Authorization": _apiKey,
-          "Content-Type": "application/json"
-        },
-        body: body,
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        List<dynamic> coords = data['features'][0]['geometry']['coordinates'];
-        List<LatLng> route = coords.map((c) => LatLng(c[1], c[0])).toList();
-
-        setState(() {
-          _routePoints = route;
-        });
-      } else {
-        print('Erreur lors de la récupération de l\'itinéraire: ${response.body}');
+        if (response.statusCode == 200) {
+          var data = jsonDecode(response.body);
+          if (data['routes'] != null && data['routes'].isNotEmpty) {
+            String geometry = data['routes'][0]['geometry'];
+            List<LatLng> segmentRoute = _decodePolyline(geometry);
+            fullRoute.addAll(segmentRoute);
+          } else {
+            print('Erreur: Pas de routes trouvées');
+          }
+          
+          await Future.delayed(Duration(milliseconds: 500));
+        } else {
+          print('Erreur lors de la récupération de l\'itinéraire: ${response.body}');
+        }
+      } catch (e) {
+        print('Erreur lors de la génération du segment ${i}: $e');
       }
-    } catch (e) {
-      print('Erreur lors de la génération de l\'itinéraire: $e');
     }
+
+    setState(() {
+      _routePoints = fullRoute;
+    });
+    
+    _fitBounds();
+  }
+
+  List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> points = [];
+    int index = 0;
+    int len = encoded.length;
+    int lat = 0;
+    int lng = 0;
+
+    while (index < len) {
+      int b;
+      int shift = 0;
+      int result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.add(LatLng(lat / 1E5, lng / 1E5));
+    }
+    return points;
+  }
+
+  void _fitBounds() {
+    if (_routePoints.isEmpty) return;
+    
+    double minLat = _routePoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
+    double maxLat = _routePoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
+    double minLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
+    double maxLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+
+    final bounds = LatLngBounds(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
+    );
+
+    _mapController.fitBounds(
+      bounds,
+      options: const FitBoundsOptions(padding: EdgeInsets.all(50.0)),
+    );
   }
 
   @override
@@ -301,4 +358,12 @@ class _TourMapScreenState extends State<TourMapScreen> {
       ),
     );
   }
+}
+
+class FitBoundsOptions {
+  const FitBoundsOptions({required EdgeInsets padding});
+}
+
+extension on MapController {
+  void fitBounds(LatLngBounds bounds, {required options}) {}
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
+import 'package:flutter_application_2/screens/tour_map.dart';
 import 'cday.dart';  // Assure-toi d'avoir la page Cday importée
 import 'qr_screen.dart';
+import 'panier.screen.dart';
 
 void main() {
   runApp(MyApp());
@@ -27,7 +29,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     SubscriptionScreen(),
-    Center(child: Text('Panier', style: TextStyle(fontSize: 24))),
+    PanierScreen( // Redirection vers la page PanierScreen
+      simplePaniers: 2,
+      familialPaniers: 3,
+      fruitPaniers: 2,
+      eggPaniers: 1,
+    ),
     Center(child: Text('Profil', style: TextStyle(fontSize: 24))),
     DayPickerPage(), // Redirection vers la page Cday
     QrScreen(),
@@ -69,10 +76,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class SubscriptionScreen extends StatelessWidget {
   final List<String> subscriptions = [
-    'Abonnement Classique',
-    'Abonnement Bio',
-    'Abonnement Premium',
+    'Epinal',
+    'Tournée 2',
+    'Tournée 3',
   ];
+
+  void _onTourneeSelected(BuildContext context, String tournee) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TourMapScreen(selectedDay: tournee),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,14 +101,31 @@ class SubscriptionScreen extends StatelessWidget {
             items: subscriptions.map((plan) {
               return Builder(
                 builder: (BuildContext context) {
-                  return Container(
-                    width: MediaQuery.of(context).size.width,
-                    margin: EdgeInsets.symmetric(horizontal: 5.0),
-                    decoration: BoxDecoration(color: Colors.greenAccent),
-                    child: Center(
-                      child: Text(
-                        plan,
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  return GestureDetector(
+                    onTap: () => _onTourneeSelected(context, plan),
+                    child: Container(
+                      width: MediaQuery.of(context).size.width,
+                      margin: EdgeInsets.symmetric(horizontal: 5.0),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          plan,
+                          style: TextStyle(
+                            fontSize: 24, 
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                   );
