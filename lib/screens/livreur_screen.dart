@@ -134,14 +134,14 @@ class _TourMapScreenState extends State<TourMapScreen> {
                       width: 40.0,
                       height: 40.0,
                       point: pos,
-                      child: const Icon(Icons.location_pin, color: Colors.red),
+                      builder: (BuildContext context) => const Icon(Icons.location_pin, color: Colors.red),
                     ),
                   if (currentPosition != null)
                     Marker(
                       width: 40.0,
                       height: 40.0,
                       point: currentPosition!,
-                      child: const Icon(Icons.my_location, color: Colors.blue),
+                      builder: (BuildContext context) => const Icon(Icons.my_location, color: Colors.blue),
                     ),
                 ]),
               ],

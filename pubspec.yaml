@@ -5,7 +5,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.6.1
+  sdk: ">=3.6.1 <4.0.0"
 
 dependencies:
   flutter:
@@ -18,29 +18,31 @@ dependencies:
   qr_code_scanner: ^1.0.1
   
   # LatLong utilities for geographical data
-  latlong2: ^0.9.1
+  latlong2: ^0.8.1
   
-  # Flutter Map for displaying maps (TomTom integration)
-  flutter_map: ^8.0.0
+  # Flutter Map pour afficher les cartes
+  flutter_map: ^3.1.0  
+  flutter_map_directions: 0.0.2
+
   
-  # Geolocation services for obtaining current location
-  geolocator: ^13.0.2
+  # Géolocalisation et géocodage
+  geolocator: ^11.0.0
   geocoding: ^3.0.0
-  http: ^1.3.0
+  http: ^0.13.4
   mysql1: ^0.20.0
   
-  # Proj4 Dart for coordinate system transformations
+  # Proj4 Dart pour les projections géographiques
   proj4dart: ^2.1.0
   
-  # Google Maps Flutter package (if needed alongside TomTom)
+  # Google Maps et itinéraires
   google_maps_flutter: ^2.5.0
   carousel_slider: ^5.0.0
-  
+  flutter_polyline_points: ^1.0.0  # Pour gérer les polylignes
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # Lints for recommended Flutter development practices
   flutter_lints: ^5.0.0
 
 flutter:

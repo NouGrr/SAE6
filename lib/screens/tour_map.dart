@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
 
 class DeliveryPoint {
   final int depotId;
@@ -71,9 +72,13 @@ class _TourMapScreenState extends State<TourMapScreen> {
   LatLng? _currentPosition;
   bool _isLoading = true;
   Timer? _locationTimer;
+  final String googleMapsApiKey = 'AIzaSyA_1OfCABTNa9S4LwxykJFJcrTje4_i-q0'; // Votre clé API
+  late MarkerLayerOptions _markerLayerOptions;
+  late PolylineLayerOptions _polylineLayerOptions;
 
   @override
   void initState() {
+    super.initState();
     _mapController = MapController();
     _getCurrentLocation();
     _loadAllRoutes();
@@ -111,9 +116,8 @@ class _TourMapScreenState extends State<TourMapScreen> {
           .map((json) => DeliveryPoint.fromJson(json))
           .toList();
 
-        // Trier les points de livraison par depotId
         deliveryPoints.sort((a, b) => a.depotId.compareTo(b.depotId));
-        
+
         setState(() {
           _routePoints = deliveryPoints
             .map((point) => LatLng(point.location[0], point.location[1]))
@@ -122,6 +126,7 @@ class _TourMapScreenState extends State<TourMapScreen> {
           _isLoading = false;
         });
 
+        _markers.clear();
         for (var point in deliveryPoints) {
           if (point.location[0] != 0 && point.location[1] != 0) {
             _addMarker(
@@ -134,6 +139,16 @@ class _TourMapScreenState extends State<TourMapScreen> {
         if (_routePoints.isNotEmpty) {
           _generateRoute();
         }
+
+        // Initialisation des layers
+        _markerLayerOptions = MarkerLayerOptions(markers: _markers);
+        _polylineLayerOptions = PolylineLayerOptions(polylines: [
+          Polyline(
+            points: _routePoints,
+            strokeWidth: 4.0,
+            color: Colors.blue,
+          ),
+        ]);
       } else {
         print("Erreur API: ${response.statusCode}");
         print("Response: ${response.body}");
@@ -178,12 +193,14 @@ class _TourMapScreenState extends State<TourMapScreen> {
         point: _currentPosition!,
         width: 50,
         height: 50,
-        child: Column(
-          children: [
-            Icon(Icons.directions_car, color: Colors.blue, size: 30.0),
-            Text('Véhicule', style: TextStyle(fontSize: 12, color: Colors.black)),
-          ],
-        ),
+        builder: (BuildContext context) {
+          return Column(
+            children: [
+              Icon(Icons.directions_car, color: Colors.blue, size: 30.0),
+              Text('Véhicule', style: TextStyle(fontSize: 12, color: Colors.black)),
+            ],
+          );
+        },
       ),
     );
 
@@ -198,7 +215,7 @@ class _TourMapScreenState extends State<TourMapScreen> {
         point: position,
         width: 120,
         height: 100,
-        child: Column(
+        builder: (BuildContext context) => Column(
           children: [
             Icon(Icons.location_on, color: Colors.red, size: 30.0),
             Container(
@@ -214,7 +231,7 @@ class _TourMapScreenState extends State<TourMapScreen> {
               ),
             ),
           ],
-        ),
+        ), 
       ),
     );
   }
@@ -229,10 +246,7 @@ class _TourMapScreenState extends State<TourMapScreen> {
     ];
 
     for (int i = 0; i < orderedPoints.length - 1; i++) {
-      String url = 'https://router.project-osrm.org/route/v1/driving/'
-          '${orderedPoints[i].longitude},${orderedPoints[i].latitude};'
-          '${orderedPoints[i + 1].longitude},${orderedPoints[i + 1].latitude}'
-          '?overview=full&geometries=polyline';
+      String url = 'https://maps.googleapis.com/maps/api/directions/json?origin=${orderedPoints[i].latitude},${orderedPoints[i].longitude}&destination=${orderedPoints[i + 1].latitude},${orderedPoints[i + 1].longitude}&key=$googleMapsApiKey';
 
       try {
         final response = await http.get(Uri.parse(url));
@@ -240,33 +254,36 @@ class _TourMapScreenState extends State<TourMapScreen> {
         if (response.statusCode == 200) {
           var data = jsonDecode(response.body);
           if (data['routes'] != null && data['routes'].isNotEmpty) {
-            String geometry = data['routes'][0]['geometry'];
+            String geometry = data['routes'][0]['overview_polyline']['points'];
             List<LatLng> segmentRoute = _decodePolyline(geometry);
             fullRoute.addAll(segmentRoute);
           } else {
-            print('Erreur: Pas de routes trouvées');
+            print("Aucune route trouvée entre les points.");
           }
-          
-          await Future.delayed(Duration(milliseconds: 500));
-        } else {
-          print('Erreur lors de la récupération de l\'itinéraire: ${response.body}');
         }
       } catch (e) {
-        print('Erreur lors de la génération du segment ${i}: $e');
+        print("Erreur de récupération de l'itinéraire: $e");
       }
     }
 
     setState(() {
-      _routePoints = fullRoute;
+      if (fullRoute.isNotEmpty) {
+        _markers.add(Marker(
+          point: orderedPoints.last,
+          width: 120,
+          height: 100,
+          builder: (BuildContext context) => Icon(Icons.location_on, color: Colors.green, size: 30.0),
+        ));
+
+        _mapController.fitBounds(LatLngBounds.fromPoints(fullRoute));
+      }
     });
-    
-    _fitBounds();
   }
 
-  List<LatLng> _decodePolyline(String encoded) {
+  List<LatLng> _decodePolyline(String polyline) {
     List<LatLng> points = [];
     int index = 0;
-    int len = encoded.length;
+    int len = polyline.length;
     int lat = 0;
     int lng = 0;
 
@@ -275,8 +292,9 @@ class _TourMapScreenState extends State<TourMapScreen> {
       int shift = 0;
       int result = 0;
       do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1F) << shift;
+        b = polyline.codeUnitAt(index) - 63;
+        index++;
+        result |= (b & 0x1f) << shift;
         shift += 5;
       } while (b >= 0x20);
       int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
@@ -285,8 +303,9 @@ class _TourMapScreenState extends State<TourMapScreen> {
       shift = 0;
       result = 0;
       do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1F) << shift;
+        b = polyline.codeUnitAt(index) - 63;
+        index++;
+        result |= (b & 0x1f) << shift;
         shift += 5;
       } while (b >= 0x20);
       int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
@@ -294,76 +313,82 @@ class _TourMapScreenState extends State<TourMapScreen> {
 
       points.add(LatLng(lat / 1E5, lng / 1E5));
     }
+
     return points;
   }
 
-  void _fitBounds() {
-    if (_routePoints.isEmpty) return;
-    
-    double minLat = _routePoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
-    double maxLat = _routePoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
-    double minLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
-    double maxLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
-
-    final bounds = LatLngBounds(
-      LatLng(minLat, minLng),
-      LatLng(maxLat, maxLng),
-    );
-
-    _mapController.fitBounds(
-      bounds,
-      options: const FitBoundsOptions(padding: EdgeInsets.all(50.0)),
-    );
-  }
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Itinéraire de livraison'),
-      ),
-      body: Column(
-        children: [
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator()),
-          if (!_isLoading)
-            Expanded(
-              child: _currentPosition == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : FlutterMap(
-                      options: MapOptions(
-                        initialCenter: _currentPosition ?? LatLng(48.290052, 6.941962),
-                        initialZoom: 15.0,
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                          subdomains: ['a', 'b', 'c'],
-                        ),
-                        MarkerLayer(markers: _markers),
-                        if (_routePoints.isNotEmpty)
-                          PolylineLayer(
-                            polylines: [
-                              Polyline(
-                                points: _routePoints,
-                                strokeWidth: 5.0,
-                                color: Colors.blue,
-                              ),
-                            ],
-                          ),
-                      ],
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Text('Itinéraire de Livraison'),
+    ),
+    body: _isLoading
+        ? Center(child: CircularProgressIndicator())
+        : FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      center: _center ?? LatLng(48.8566, 2.3522), // Paris par défaut
+                      zoom: 10.0,
+                      maxZoom: 18.0,
                     ),
-            ),
-        ],
-      ),
-    );
-  }
+                    children: [
+                      // La couche de carte de base (OpenStreetMap)
+                      TileLayer(
+                        urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                        subdomains: ['a', 'b', 'c'],
+                      ),
+                      // Ajouter les markers si on en a
+                      if (_markers.isNotEmpty)
+                        MarkerLayer(
+                          markers: _markers,
+                        ),
+                      // Ajouter les polylines si on en a
+                    ],
+                  ),
+  );
+}
 }
 
-class FitBoundsOptions {
-  const FitBoundsOptions({required EdgeInsets padding});
+class TileLayerOptions {
+  final String urlTemplate;
+  final List<String> subdomains;
+  
+  TileLayerOptions({required this.urlTemplate, required this.subdomains});
 }
+
 
 extension on MapController {
-  void fitBounds(LatLngBounds bounds, {required options}) {}
+  void fitBounds(LatLngBounds latLngBounds) {
+    // Ici tu peux mettre la logique pour ajuster la vue sur les bornes
+    // Par exemple, tu peux utiliser des méthodes pour adapter la carte aux coordonnées.
+  }
+}
+
+class MarkerLayerOptions {
+  final List<Marker> markers;
+  
+  MarkerLayerOptions({required this.markers});
+}
+
+class PolylineLayerOptions {
+  final List<Polyline> polylines;
+
+  PolylineLayerOptions({required this.polylines});
+}
+
+class Polyline {
+  final List<LatLng> points;
+  final double strokeWidth;
+  final Color color;
+
+  Polyline({required this.points, required this.strokeWidth, required this.color});
+}
+
+class layers{
+  final List<TileLayerOptions> TileLayer;
+  final List<MarkerLayerOptions> MarkerLayer;
+  final List<PolylineLayerOptions> PolylineLayer;
+
+  layers({required this.TileLayer, required this.MarkerLayer, required this.PolylineLayer});
 }
