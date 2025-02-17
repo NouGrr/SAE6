@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-
 class DeliveryPoint {
   final int depotId;
   final String depot;
@@ -69,12 +68,10 @@ class _TourMapScreenState extends State<TourMapScreen> {
   late final MapController _mapController;
   List<Marker> _markers = [];
   List<LatLng> _routePoints = [];
+  List<String> _instructions = [];
   LatLng? _currentPosition;
   bool _isLoading = true;
   Timer? _locationTimer;
-  final String googleMapsApiKey = 'AIzaSyA_1OfCABTNa9S4LwxykJFJcrTje4_i-q0'; // Votre clé API
-  late MarkerLayerOptions _markerLayerOptions;
-  late PolylineLayerOptions _polylineLayerOptions;
 
   @override
   void initState() {
@@ -139,16 +136,6 @@ class _TourMapScreenState extends State<TourMapScreen> {
         if (_routePoints.isNotEmpty) {
           _generateRoute();
         }
-
-        // Initialisation des layers
-        _markerLayerOptions = MarkerLayerOptions(markers: _markers);
-        _polylineLayerOptions = PolylineLayerOptions(polylines: [
-          Polyline(
-            points: _routePoints,
-            strokeWidth: 4.0,
-            color: Colors.blue,
-          ),
-        ]);
       } else {
         print("Erreur API: ${response.statusCode}");
         print("Response: ${response.body}");
@@ -240,13 +227,16 @@ class _TourMapScreenState extends State<TourMapScreen> {
     if (_currentPosition == null || _routePoints.isEmpty) return;
 
     List<LatLng> fullRoute = [];
+    List<String> instructions = [];
     List<LatLng> orderedPoints = [
       _currentPosition!,
       ..._routePoints,
     ];
 
     for (int i = 0; i < orderedPoints.length - 1; i++) {
-      String url = 'https://maps.googleapis.com/maps/api/directions/json?origin=${orderedPoints[i].latitude},${orderedPoints[i].longitude}&destination=${orderedPoints[i + 1].latitude},${orderedPoints[i + 1].longitude}&key=$googleMapsApiKey';
+      String url = 'https://router.project-osrm.org/route/v1/driving/'
+          '${orderedPoints[i].longitude},${orderedPoints[i].latitude};'
+          '${orderedPoints[i + 1].longitude},${orderedPoints[i + 1].latitude}?overview=full&geometries=polyline&steps=true';
 
       try {
         final response = await http.get(Uri.parse(url));
@@ -254,36 +244,40 @@ class _TourMapScreenState extends State<TourMapScreen> {
         if (response.statusCode == 200) {
           var data = jsonDecode(response.body);
           if (data['routes'] != null && data['routes'].isNotEmpty) {
-            String geometry = data['routes'][0]['overview_polyline']['points'];
-            List<LatLng> segmentRoute = _decodePolyline(geometry);
+            String polyline = data['routes'][0]['geometry'];
+            List<LatLng> segmentRoute = _decodePolyline(polyline);
             fullRoute.addAll(segmentRoute);
+
+            // Extract instructions
+            var steps = data['routes'][0]['legs'][0]['steps'];
+            for (var step in steps) {
+              instructions.add(step['maneuver']['instruction']);
+            }
           } else {
-            print("Aucune route trouvée entre les points.");
+            print('Erreur: Pas de routes trouvées');
           }
+          
+          await Future.delayed(Duration(milliseconds: 500));
+        } else {
+          print('Erreur lors de la récupération de l\'itinéraire: ${response.body}');
         }
       } catch (e) {
-        print("Erreur de récupération de l'itinéraire: $e");
+        print('Erreur lors de la génération du segment ${i}: $e');
       }
     }
 
     setState(() {
-      if (fullRoute.isNotEmpty) {
-        _markers.add(Marker(
-          point: orderedPoints.last,
-          width: 120,
-          height: 100,
-          builder: (BuildContext context) => Icon(Icons.location_on, color: Colors.green, size: 30.0),
-        ));
-
-        _mapController.fitBounds(LatLngBounds.fromPoints(fullRoute));
-      }
+      _routePoints = fullRoute;
+      _instructions = instructions;
     });
+    
+    _fitBounds();
   }
 
-  List<LatLng> _decodePolyline(String polyline) {
+  List<LatLng> _decodePolyline(String encoded) {
     List<LatLng> points = [];
     int index = 0;
-    int len = polyline.length;
+    int len = encoded.length;
     int lat = 0;
     int lng = 0;
 
@@ -292,9 +286,8 @@ class _TourMapScreenState extends State<TourMapScreen> {
       int shift = 0;
       int result = 0;
       do {
-        b = polyline.codeUnitAt(index) - 63;
-        index++;
-        result |= (b & 0x1f) << shift;
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
         shift += 5;
       } while (b >= 0x20);
       int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
@@ -303,9 +296,8 @@ class _TourMapScreenState extends State<TourMapScreen> {
       shift = 0;
       result = 0;
       do {
-        b = polyline.codeUnitAt(index) - 63;
-        index++;
-        result |= (b & 0x1f) << shift;
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
         shift += 5;
       } while (b >= 0x20);
       int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
@@ -313,19 +305,37 @@ class _TourMapScreenState extends State<TourMapScreen> {
 
       points.add(LatLng(lat / 1E5, lng / 1E5));
     }
-
     return points;
   }
 
+  void _fitBounds() {
+    if (_routePoints.isEmpty) return;
+    
+    double minLat = _routePoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
+    double maxLat = _routePoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
+    double minLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
+    double maxLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+
+    LatLngBounds bounds = LatLngBounds(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
+    );
+
+    _mapController.fitBounds(bounds, options: FitBoundsOptions(padding: EdgeInsets.all(50)));
+  }
+
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: Text('Itinéraire de Livraison'),
-    ),
-    body: _isLoading
-        ? Center(child: CircularProgressIndicator())
-        : FlutterMap(
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Itinéraire de Livraison'),
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Expanded(
+                  child: FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
                       center: _center ?? LatLng(48.8566, 2.3522), // Paris par défaut
@@ -333,21 +343,40 @@ Widget build(BuildContext context) {
                       maxZoom: 18.0,
                     ),
                     children: [
-                      // La couche de carte de base (OpenStreetMap)
                       TileLayer(
                         urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
                         subdomains: ['a', 'b', 'c'],
                       ),
-                      // Ajouter les markers si on en a
-                      if (_markers.isNotEmpty)
-                        MarkerLayer(
-                          markers: _markers,
-                        ),
-                      // Ajouter les polylines si on en a
+                      MarkerLayer(
+                        markers: _markers,
+                      ),
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: _routePoints,
+                            color: Colors.blue,
+                            strokeWidth: 5,
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-  );
-}
+                ),
+                if (_instructions.isNotEmpty)
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _instructions.length,
+                      itemBuilder: (context, index) {
+                        return ListTile(
+                          title: Text(_instructions[index]),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
 }
 
 class TileLayerOptions {
@@ -376,14 +405,8 @@ class PolylineLayerOptions {
 
   PolylineLayerOptions({required this.polylines});
 }
+// Removed custom Polyline class to avoid conflict with flutter_map's Polyline class
 
-class Polyline {
-  final List<LatLng> points;
-  final double strokeWidth;
-  final Color color;
-
-  Polyline({required this.points, required this.strokeWidth, required this.color});
-}
 
 class layers{
   final List<TileLayerOptions> TileLayer;

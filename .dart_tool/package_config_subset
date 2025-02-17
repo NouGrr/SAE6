@@ -194,6 +194,10 @@ mysql1
 2.12
 file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/mysql1-0.20.0/
 file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/mysql1-0.20.0/lib/
+nested
+2.12
+file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/nested-1.0.0/
+file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/nested-1.0.0/lib/
 path
 3.4
 file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/path-1.9.1/
@@ -218,6 +222,10 @@ proj4dart
 2.12
 file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/proj4dart-2.1.0/
 file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/proj4dart-2.1.0/lib/
+provider
+2.12
+file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/provider-6.1.2/
+file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/provider-6.1.2/lib/
 qr_code_scanner
 2.17
 file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/qr_code_scanner-1.0.1/

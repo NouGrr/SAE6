@@ -314,6 +314,12 @@
       "languageVersion": "2.12"
     },
     {
+      "name": "nested",
+      "rootUri": "file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/nested-1.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "path",
       "rootUri": "file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/path-1.9.1",
       "packageUri": "lib/",
@@ -346,6 +352,12 @@
     {
       "name": "proj4dart",
       "rootUri": "file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/proj4dart-2.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
+      "name": "provider",
+      "rootUri": "file:///C:/Users/ewanu/AppData/Local/Pub/Cache/hosted/pub.dev/provider-6.1.2",
       "packageUri": "lib/",
       "languageVersion": "2.12"
     },
@@ -470,7 +482,7 @@
       "languageVersion": "3.6"
     }
   ],
-  "generated": "2025-02-17T09:42:30.124388Z",
+  "generated": "2025-02-17T10:43:04.860920Z",
   "generator": "pub",
   "generatorVersion": "3.7.0",
   "flutterRoot": "file:///C:/Users/ewanu/Documents/BUT%203/flutter",

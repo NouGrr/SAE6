@@ -38,6 +38,7 @@ dependencies:
   google_maps_flutter: ^2.5.0
   carousel_slider: ^5.0.0
   flutter_polyline_points: ^1.0.0  # Pour gérer les polylignes
+  provider: ^6.1.2
 
 dev_dependencies:
   flutter_test:
