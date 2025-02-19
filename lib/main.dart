@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/app_state.dart';
-import 'qr_scanner_service.dart';
 import 'screens/client_screen.dart';
 import 'screens/liv_screen.dart'; // Importez votre fichier liv_screen.dart
-
 
 void main() {
   runApp(

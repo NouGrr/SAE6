@@ -1,10 +1,7 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
-import 'dart:ui_web' as ui_web;
-import 'package:flutter_web_plugins/flutter_web_plugins.dart';
-import 'dart:html' as html;
+import 'app_state.dart';
 
 class QrScreen extends StatefulWidget {
   @override
@@ -18,11 +15,6 @@ class _QrScreenState extends State<QrScreen> {
   String depotData = ''; // Pour stocker les informations du dépôt
   bool isDepotScanned = false;
   bool isPackageScanned = false;
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   void dispose() {
@@ -82,6 +74,7 @@ class _QrScreenState extends State<QrScreen> {
     } else if (isDepotScanned && !isPackageScanned) {
       // Si un dépôt est scanné et un panier n'est pas encore scanné.
       isPackageScanned = true; // Validation du panier
+      Provider.of<AppState>(context, listen: false).setQrScanned(true);
     } else if (isDepotScanned && isPackageScanned) {
       // Si un dépôt et un panier sont scannés, on prépare pour le prochain dépôt.
       depotData = scannedData;
@@ -91,4 +84,3 @@ class _QrScreenState extends State<QrScreen> {
     }
   }
 }
-
