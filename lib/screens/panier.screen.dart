@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/models/delivery_point.dart';
 import 'package:flutter_application_2/screens/panierdetail_screen.dart';
 import 'panierdetail_screen.dart';
 
@@ -12,7 +13,7 @@ class PanierScreen extends StatelessWidget {
     required this.simplePaniers,
     required this.familialPaniers,
     required this.fruitPaniers,
-    required this.eggPaniers,
+    required this.eggPaniers, required List<DeliveryPoint> panier,
   });
 
   @override

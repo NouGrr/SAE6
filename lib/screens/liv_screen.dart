@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/screens/panier.screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_application_2/models/delivery_point.dart' as model; // Importez la classe DeliveryPoint
@@ -29,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     SubscriptionScreen(),
-    Center(child: Text('Panier', style: TextStyle(fontSize: 24))),
+    PanierScreen(simplePaniers: 1, familialPaniers: 2, fruitPaniers: 1, eggPaniers: 2, panier: [],),
     Center(child: Text('Profil', style: TextStyle(fontSize: 24))),
     Center(child: Text('Tour', style: TextStyle(fontSize: 24))),
     QrScreen(), // Ajoutez la page QR ici
