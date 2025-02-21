@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 
 class ClientScreen extends StatelessWidget {
+  late final String message;
+    ClientScreen({required this.message});
   @override
   Widget build(BuildContext context) {
     return Scaffold(

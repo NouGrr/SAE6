@@ -26,7 +26,7 @@ class RoleSelectionScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => ClientScreen()),
+                  MaterialPageRoute(builder: (context) => ClientScreen(message: '',)),
                 );
               },
               child: Text('Client'),

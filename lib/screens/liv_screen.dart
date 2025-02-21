@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:carousel_slider/carousel_slider.dart';
-import 'package:flutter_application_2/screens/tour_map.dart';
-import 'cday.dart';  // Assure-toi d'avoir la page Cday importée
-import 'qr_screen.dart';
-import 'panier.screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_application_2/models/delivery_point.dart' as model; // Importez la classe DeliveryPoint
+import 'tour_map.dart' as screen;
+import 'qr_screen.dart'; // Importez la page QR
 
 void main() {
   runApp(MyApp());
@@ -29,15 +29,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     SubscriptionScreen(),
-    PanierScreen( // Redirection vers la page PanierScreen
-      simplePaniers: 2,
-      familialPaniers: 3,
-      fruitPaniers: 2,
-      eggPaniers: 1,
-    ),
+    Center(child: Text('Panier', style: TextStyle(fontSize: 24))),
     Center(child: Text('Profil', style: TextStyle(fontSize: 24))),
-    DayPickerPage(), // Redirection vers la page Cday
-    QrScreen(),
+    Center(child: Text('Tour', style: TextStyle(fontSize: 24))),
+    QrScreen(), // Ajoutez la page QR ici
   ];
 
   void _onItemTapped(int index) {
@@ -59,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
                 BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Panier'),
                 BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-                BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Tour'),  // "Tour" icône
+                BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Tour'),
                 BottomNavigationBarItem(icon: Icon(Icons.qr_code), label: 'QR'),
               ],
               currentIndex: _selectedIndex, // Indicateur de page active
@@ -74,18 +69,71 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class SubscriptionScreen extends StatelessWidget {
-  final List<String> subscriptions = [
-    'Epinal',
-    'Tournée 2',
-    'Tournée 3',
-  ];
+class SubscriptionScreen extends StatefulWidget {
+  @override
+  _SubscriptionScreenState createState() => _SubscriptionScreenState();
+}
 
-  void _onTourneeSelected(BuildContext context, String tournee) {
+class _SubscriptionScreenState extends State<SubscriptionScreen> {
+  List<model.DeliveryPoint> _subscriptions = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSubscriptions();
+  }
+
+  Future<void> _fetchSubscriptions() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://qjnieztpwnwroinqrolm.supabase.co/rest/v1/detail_livraisons?semaine=eq.9&tournee_id=eq.7&select=depot_id,depot,qte,adresses(adresse,codepostal,ville,localisation)'),
+        headers: {
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbmllenRwd253cm9pbnFyb2xtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4MTEwNTAsImV4cCI6MjA1MzM4NzA1MH0.orLZFmX3i_qR0H4H6WwhUilNf5a1EAfrFhbbeRvN41M',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbmllenRwd253cm9pbnFyb2xtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4MTEwNTAsImV4cCI6MjA1MzM4NzA1MH0.orLZFmX3i_qR0H4H6WwhUilNf5a1EAfrFhbbeRvN41M'
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        print('Données reçues: $data');
+
+        List<model.DeliveryPoint> deliveryPoints = data
+          .where((json) => json['adresses'] != null)
+          .map((json) => model.DeliveryPoint.fromJson(json))
+          .toList();
+
+        // Utiliser un Set pour éliminer les doublons
+        Set<model.DeliveryPoint> uniqueDeliveryPoints = deliveryPoints.toSet();
+
+        setState(() {
+          _subscriptions = uniqueDeliveryPoints.toList();
+          _isLoading = false;
+        });
+      } else {
+        print("Erreur API: ${response.statusCode}");
+        print("Response: ${response.body}");
+      }
+    } catch (e) {
+      print("Erreur lors du chargement des abonnements: $e");
+    }
+  }
+
+  void _onTourneeSelected(BuildContext context, model.DeliveryPoint tournee) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => TourMapScreen(selectedDay: tournee),
+        builder: (context) => screen.TourMapScreen(
+          deliveryPoint: tournee, 
+          selectedDay: '',
+          depotId: tournee.depotId.toString(),
+          depot: tournee.depot,
+          quantity: tournee.quantity.toString(),
+          address: tournee.address,
+          postalCode: tournee.postalCode,
+          city: tournee.city,
+          location: tournee.location.toString(),
+        ),
       ),
     );
   }
@@ -93,48 +141,50 @@ class SubscriptionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Choisissez votre abonnement')),
-      body: Column(
-        children: [
-          CarouselSlider(
-            options: CarouselOptions(height: 200, autoPlay: true),
-            items: subscriptions.map((plan) {
-              return Builder(
-                builder: (BuildContext context) {
-                  return GestureDetector(
-                    onTap: () => _onTourneeSelected(context, plan),
-                    child: Container(
-                      width: MediaQuery.of(context).size.width,
-                      margin: EdgeInsets.symmetric(horizontal: 5.0),
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
+      appBar: AppBar(title: Text('Choisissez une tournée')),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              itemCount: _subscriptions.length,
+              itemBuilder: (context, index) {
+                final plan = _subscriptions[index];
+                return GestureDetector(
+                  onTap: () => _onTourneeSelected(context, plan),
+                  child: Container(
+                    margin: EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      title: Text(
+                        plan.depot,
+                        style: TextStyle(
+                          fontSize: 24, 
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
-                      child: Center(
-                        child: Text(
-                          plan,
-                          style: TextStyle(
-                            fontSize: 24, 
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                      subtitle: Text(
+                        '${plan.quantity} unités\n${plan.address}, ${plan.postalCode} ${plan.city}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white70,
                         ),
                       ),
                     ),
-                  );
-                },
-              );
-            }).toList(),
-          ),
-        ],
-      ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

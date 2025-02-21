@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'tour_map.dart';
+import '../models/delivery_point.dart' as model;
 
 class DayPickerPage extends StatefulWidget {
   @override
@@ -51,7 +52,26 @@ class _DayPickerPageState extends State<DayPickerPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => TourMapScreen(selectedDay: _selectedDay),
+                    builder: (context) => TourMapScreen(
+                      selectedDay: _selectedDay,
+                      deliveryPoint: model.DeliveryPoint(
+                        city: 'someDeliveryPoint',
+                        depotId: 123, // Replace with an appropriate integer value
+                        depot: 'someDepot',
+                        quantity: 1.0,
+                        address: 'someAddress',
+                        postalCode: 'somePostalCode',
+                        location: [0.0, 0.0], // Replace with appropriate latitude and longitude values
+                        id: 'someId', tournee: 0,
+                      ),
+                      depotId: 'someDepotId',
+                      depot: 'someDepot',
+                      quantity: '1',
+                      address: 'someAddress',
+                      postalCode: 'somePostalCode',
+                      city: 'someCity',
+                      location: 'someLocation',
+                    ),
                   ),
                 );
               },
