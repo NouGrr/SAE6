@@ -75,50 +75,28 @@ class _TourMapScreenState extends State<TourMapScreen> {
   }
 
   Future<void> _loadDeliveryPoint() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://qjnieztpwnwroinqrolm.supabase.co/rest/v1/detail_livraisons?semaine=eq.9&tournee_id=eq.7&select=depot_id,depot,qte.sum(),adresses(adresse,codepostal,ville,localisation)'),
-        headers: {
-          'apikey': _supabaseApiKey,
-          'Authorization': 'Bearer $_supabaseApiKey',
-        },
+  try {
+      // Utiliser directement le point de livraison passé depuis liv_screen
+      model.DeliveryPoint point = widget.deliveryPoint;
+      
+      _destinationPoint = LatLng(
+        point.location[0], // Latitude
+        point.location[1]  // Longitude
       );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        print('Données Supabase reçues: $data');
+      setState(() {
+        _isLoading = false;
+      });
 
-        if (data.isNotEmpty) {
-          var point = data[0];
-          var adresses = point['adresses'];
-          var coordinates = adresses['localisation']['coordinates'] as List;
+      _markers.clear();
+      _addMarker(
+        _destinationPoint!,
+        label: "${point.depot}\n${point.quantity} unités\n${point.address}, ${point.postalCode} ${point.city}",
+        isDestination: true
+      );
 
-          _destinationPoint = LatLng(
-            coordinates[1].toDouble(),
-            coordinates[0].toDouble()
-          );
-
-          setState(() {
-            _isLoading = false;
-          });
-
-          _markers.clear();
-          _addMarker(
-            _destinationPoint!,
-            label: "${point['depot']}\n${point['qte.sum()']} unités\n${adresses['adresse']}, ${adresses['codepostal']} ${adresses['ville']}",
-            isDestination: true
-          );
-
-          if (_currentPosition != null) {
-            await _generateTomTomRoute();
-          }
-        }
-      } else {
-        print("Erreur API Supabase: ${response.statusCode}");
-        print("Response: ${response.body}");
-        setState(() {
-          _isLoading = false;
-        });
+      if (_currentPosition != null) {
+        await _generateTomTomRoute();
       }
     } catch (e) {
       print("Erreur lors du chargement du point de livraison: $e");

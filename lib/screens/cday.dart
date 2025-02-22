@@ -62,7 +62,6 @@ class _DayPickerPageState extends State<DayPickerPage> {
                         address: 'someAddress',
                         postalCode: 'somePostalCode',
                         location: [0.0, 0.0], // Replace with appropriate latitude and longitude values
-                        id: 'someId', tournee: 0,
                       ),
                       depotId: 'someDepotId',
                       depot: 'someDepot',

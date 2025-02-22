@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_2/screens/panier.screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_application_2/models/delivery_point.dart' as model; // Importez la classe DeliveryPoint
+import 'package:flutter_application_2/models/delivery_point.dart' as model;
 import 'tour_map.dart' as screen;
-import 'qr_screen.dart'; // Importez la page QR
+import 'qr_screen.dart';
 
 void main() {
   runApp(MyApp());
@@ -30,10 +30,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     SubscriptionScreen(),
-    PanierScreen(simplePaniers: 1, familialPaniers: 2, fruitPaniers: 1, eggPaniers: 2, panier: [],),
+    PanierScreen(simplePaniers: 1, familialPaniers: 2, fruitPaniers: 1, eggPaniers: 2, panier: []),
     Center(child: Text('Profil', style: TextStyle(fontSize: 24))),
     Center(child: Text('Tour', style: TextStyle(fontSize: 24))),
-    QrScreen(), // Ajoutez la page QR ici
+    QrScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -47,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          _pages[_selectedIndex], // Page correspondante
+          _pages[_selectedIndex],
           Align(
             alignment: Alignment.bottomCenter,
             child: BottomNavigationBar(
@@ -58,9 +58,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Tour'),
                 BottomNavigationBarItem(icon: Icon(Icons.qr_code), label: 'QR'),
               ],
-              currentIndex: _selectedIndex, // Indicateur de page active
+              currentIndex: _selectedIndex,
               selectedItemColor: Colors.green,
-              onTap: _onItemTapped,  // Fonction pour changer de page
+              onTap: _onItemTapped,
               type: BottomNavigationBarType.fixed,
             ),
           ),
@@ -86,46 +86,63 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Future<void> _fetchSubscriptions() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://qjnieztpwnwroinqrolm.supabase.co/rest/v1/detail_livraisons?semaine=eq.9&tournee_id=eq.7&select=depot_id,depot,qte,adresses(adresse,codepostal,ville,localisation)'),
-        headers: {
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbmllenRwd253cm9pbnFyb2xtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4MTEwNTAsImV4cCI6MjA1MzM4NzA1MH0.orLZFmX3i_qR0H4H6WwhUilNf5a1EAfrFhbbeRvN41M',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbmllenRwd253cm9pbnFyb2xtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4MTEwNTAsImV4cCI6MjA1MzM4NzA1MH0.orLZFmX3i_qR0H4H6WwhUilNf5a1EAfrFhbbeRvN41M'
-        },
-      );
+  try {
+    final response = await http.get(
+      Uri.parse('https://qjnieztpwnwroinqrolm.supabase.co/rest/v1/detail_livraisons?semaine=eq.9&tournee_id=eq.7&select=depot_id,depot,qte.sum(),adresses(adresse,codepostal,ville,localisation)'),
+      headers: {
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbmllenRwd253cm9pbnFyb2xtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4MTEwNTAsImV4cCI6MjA1MzM4NzA1MH0.orLZFmX3i_qR0H4H6WwhUilNf5a1EAfrFhbbeRvN41M',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbmllenRwd253cm9pbnFyb2xtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4MTEwNTAsImV4cCI6MjA1MzM4NzA1MH0.orLZFmX3i_qR0H4H6WwhUilNf5a1EAfrFhbbeRvN41M'
+      },
+    );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        print('Données reçues: $data');
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      print('Données reçues: $data');
 
-        List<model.DeliveryPoint> deliveryPoints = data
-          .where((json) => json['adresses'] != null)
-          .map((json) => model.DeliveryPoint.fromJson(json))
-          .toList();
-
-        // Utiliser un Set pour éliminer les doublons
-        Set<model.DeliveryPoint> uniqueDeliveryPoints = deliveryPoints.toSet();
-
-        setState(() {
-          _subscriptions = uniqueDeliveryPoints.toList();
-          _isLoading = false;
-        });
-      } else {
-        print("Erreur API: ${response.statusCode}");
-        print("Response: ${response.body}");
+      List<model.DeliveryPoint> deliveryPoints = [];
+      
+      for (var json in data) {
+        try {
+          if (json['adresses'] != null && json['adresses']['localisation'] != null) {
+            var point = model.DeliveryPoint.fromJson(json);
+            // Vérifier si le point n'existe pas déjà
+            if (!deliveryPoints.any((p) => p.depotId == point.depotId)) {
+              deliveryPoints.add(point);
+            }
+          }
+        } catch (e, stackTrace) {
+          print('Erreur lors du traitement du point: $e');
+          print('Stack trace: $stackTrace');
+          print('JSON problématique: $json');
+        }
       }
-    } catch (e) {
-      print("Erreur lors du chargement des abonnements: $e");
+
+      setState(() {
+        _subscriptions = deliveryPoints;
+        _isLoading = false;
+      });
+    } else {
+      print("Erreur API: ${response.statusCode}");
+      print("Response: ${response.body}");
+      setState(() {
+        _isLoading = false;
+      });
     }
+  } catch (e, stackTrace) {
+    print("Erreur lors du chargement des abonnements: $e");
+    print("Stack trace: $stackTrace");
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
 
   void _onTourneeSelected(BuildContext context, model.DeliveryPoint tournee) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => screen.TourMapScreen(
-          deliveryPoint: tournee, 
+          deliveryPoint: tournee,  // Passer le point de dépôt sélectionné
           selectedDay: '',
           depotId: tournee.depotId.toString(),
           depot: tournee.depot,
@@ -133,7 +150,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           address: tournee.address,
           postalCode: tournee.postalCode,
           city: tournee.city,
-          location: tournee.location.toString(),
+          location: '${tournee.location[1]},${tournee.location[0]}',
         ),
       ),
     );
@@ -169,7 +186,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       title: Text(
                         plan.depot,
                         style: TextStyle(
-                          fontSize: 24, 
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
