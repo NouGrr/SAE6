@@ -7,16 +7,20 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_application_2/models/delivery_point.dart' as model;
 
-class DeliveryPoint {
-  final int depotId;
+class TourMapScreen extends StatefulWidget {
+  final model.DeliveryPoint deliveryPoint;
+  final String selectedDay;
+  final String depotId;
   final String depot;
-  final double quantity;
+  final String quantity;
   final String address;
   final String postalCode;
   final String city;
-  final List<double> location;
+  final String location;
 
-  DeliveryPoint({
+  TourMapScreen({
+    required this.deliveryPoint,
+    required this.selectedDay,
     required this.depotId,
     required this.depot,
     required this.quantity,
@@ -26,45 +30,14 @@ class DeliveryPoint {
     required this.location,
   });
 
-  factory DeliveryPoint.fromJson(Map<String, dynamic> json) {
-    if (json['adresses'] == null) {
-      return DeliveryPoint(
-        depotId: json['depot_id'],
-        depot: json['depot'],
-        quantity: (json['qte'] as num).toDouble(),
-        address: '',
-        postalCode: '',
-        city: '',
-        location: [0, 0],
-      );
-    }
-
-    final coordinates = json['adresses']['localisation']['coordinates'] as List;
-    
-    return DeliveryPoint(
-      depotId: json['depot_id'],
-      depot: json['depot'],
-      quantity: (json['qte'] as num).toDouble(),
-      address: json['adresses']['adresse'],
-      postalCode: json['adresses']['codepostal'],
-      city: json['adresses']['ville'],
-      location: [
-        coordinates[1].toDouble(), // Latitude
-        coordinates[0].toDouble()  // Longitude
-      ],
-    );
-  }
-}
-
-class TourMapScreen extends StatefulWidget {
-  final model.DeliveryPoint deliveryPoint;
-  TourMapScreen({required this.deliveryPoint, required String selectedDay, required String depotId, required String depot, required String quantity, required String address, required String postalCode, required String city, required String location});
-
   @override
   _TourMapScreenState createState() => _TourMapScreenState();
 }
 
 class _TourMapScreenState extends State<TourMapScreen> {
+  static const String _tomTomApiKey = 'zSOGsmdG3zCKzA1CaGWaKhdSCjSR2Pqv';
+  static const String _supabaseApiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbmllenRwd253cm9pbnFyb2xtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4MTEwNTAsImV4cCI6MjA1MzM4NzA1MH0.orLZFmX3i_qR0H4H6WwhUilNf5a1EAfrFhbbeRvN41M';
+  
   LatLng? _center;
   late final MapController _mapController;
   List<Marker> _markers = [];
@@ -73,13 +46,19 @@ class _TourMapScreenState extends State<TourMapScreen> {
   LatLng? _currentPosition;
   bool _isLoading = true;
   Timer? _locationTimer;
+  bool _isGeneratingRoute = false;
+  LatLng? _destinationPoint;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    _getCurrentLocation();
-    _loadRoute();
+    _initializeMap();
+  }
+
+  Future<void> _initializeMap() async {
+    await _getCurrentLocation();
+    await _loadDeliveryPoint();
     _startLocationUpdates();
   }
 
@@ -90,56 +69,93 @@ class _TourMapScreenState extends State<TourMapScreen> {
   }
 
   void _startLocationUpdates() {
-    _locationTimer = Timer.periodic(Duration(seconds: 5), (Timer t) async {
+    _locationTimer = Timer.periodic(Duration(seconds: 10), (Timer t) async {
       await _getCurrentLocation();
     });
   }
 
-  Future<void> _loadRoute() async {
+  Future<void> _loadDeliveryPoint() async {
     try {
-      model.DeliveryPoint point = widget.deliveryPoint;
-
-      setState(() {
-        _routePoints = [
-          LatLng(point.location[0], point.location[1])
-        ];
-        _isLoading = false;
-      });
-
-      _markers.clear();
-      _addMarker(
-        LatLng(point.location[0], point.location[1]),
-        label: "${point.depot}\n${point.quantity} unités\n${point.address}"
+      final response = await http.get(
+        Uri.parse('https://qjnieztpwnwroinqrolm.supabase.co/rest/v1/detail_livraisons?semaine=eq.9&tournee_id=eq.7&select=depot_id,depot,qte.sum(),adresses(adresse,codepostal,ville,localisation)'),
+        headers: {
+          'apikey': _supabaseApiKey,
+          'Authorization': 'Bearer $_supabaseApiKey',
+        },
       );
 
-      _generateRoute();
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        print('Données Supabase reçues: $data');
+
+        if (data.isNotEmpty) {
+          var point = data[0];
+          var adresses = point['adresses'];
+          var coordinates = adresses['localisation']['coordinates'] as List;
+
+          _destinationPoint = LatLng(
+            coordinates[1].toDouble(),
+            coordinates[0].toDouble()
+          );
+
+          setState(() {
+            _isLoading = false;
+          });
+
+          _markers.clear();
+          _addMarker(
+            _destinationPoint!,
+            label: "${point['depot']}\n${point['qte.sum()']} unités\n${adresses['adresse']}, ${adresses['codepostal']} ${adresses['ville']}",
+            isDestination: true
+          );
+
+          if (_currentPosition != null) {
+            await _generateTomTomRoute();
+          }
+        }
+      } else {
+        print("Erreur API Supabase: ${response.statusCode}");
+        print("Response: ${response.body}");
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      print("Erreur lors du chargement de l'itinéraire: $e");
+      print("Erreur lors du chargement du point de livraison: $e");
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _getCurrentLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Les services de localisation sont désactivés');
       }
-    }
 
-    Position position = await Geolocator.getCurrentPosition();
-    if (mounted) {
-      setState(() {
-        _currentPosition = LatLng(position.latitude, position.longitude);
-        _center = _currentPosition;
-        _updateCurrentLocationMarker();
-        _mapController.move(_currentPosition!, 15.0); // Centrer la carte sur la position actuelle
-      });
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Permission de localisation refusée');
+        }
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high
+      );
+
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(position.latitude, position.longitude);
+          _center = _currentPosition;
+          _updateCurrentLocationMarker();
+        });
+      }
+    } catch (e) {
+      print("Erreur de localisation: $e");
     }
   }
 
@@ -158,19 +174,29 @@ class _TourMapScreenState extends State<TourMapScreen> {
           return Column(
             children: [
               Icon(Icons.directions_car, color: Colors.blue, size: 30.0),
-              Text('Véhicule', style: TextStyle(fontSize: 12, color: Colors.black)),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Ma position',
+                  style: TextStyle(fontSize: 10, color: Colors.black),
+                ),
+              ),
             ],
           );
         },
       ),
     );
 
-    if (_markers.length > 1) {
-      _generateRoute();
+    if (!_isGeneratingRoute && _destinationPoint != null) {
+      _generateTomTomRoute();
     }
   }
 
-  void _addMarker(LatLng position, {String label = "Point de livraison"}) {
+  void _addMarker(LatLng position, {required String label, bool isDestination = false}) {
     _markers.add(
       Marker(
         point: position,
@@ -178,12 +204,23 @@ class _TourMapScreenState extends State<TourMapScreen> {
         height: 100,
         builder: (BuildContext context) => Column(
           children: [
-            Icon(Icons.location_on, color: Colors.red, size: 30.0),
+            Icon(
+              isDestination ? Icons.location_on : Icons.place,
+              color: isDestination ? Colors.red : Colors.blue,
+              size: 30.0
+            ),
             Container(
-              padding: EdgeInsets.all(2),
+              padding: EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Text(
                 label,
@@ -192,94 +229,75 @@ class _TourMapScreenState extends State<TourMapScreen> {
               ),
             ),
           ],
-        ), 
+        ),
       ),
     );
   }
 
-  Future<void> _generateRoute() async {
-  if (_currentPosition == null || _routePoints.isEmpty) return;
+  Future<void> _generateTomTomRoute() async {
+    if (_currentPosition == null || _destinationPoint == null || _isGeneratingRoute) {
+      print('Position actuelle ou destination manquante');
+      return;
+    }
 
-  List<LatLng> fullRoute = [];
-  List<String> instructions = [];
-  List<LatLng> orderedPoints = [
-    _currentPosition!,
-    _routePoints.first, // Seulement le premier point de dépôt
-  ];
-
-  for (int i = 0; i < orderedPoints.length - 1; i++) {
-    String url = 'https://router.project-osrm.org/route/v1/driving/'
-        '${orderedPoints[i].longitude},${orderedPoints[i].latitude};'
-        '${orderedPoints[i + 1].longitude},${orderedPoints[i + 1].latitude}?overview=full&geometries=polyline&steps=true';
+    setState(() {
+      _isGeneratingRoute = true;
+    });
 
     try {
-      final response = await http.get(Uri.parse(url));
+      final uri = Uri.https('api.tomtom.com', '/routing/1/calculateRoute/${_currentPosition!.latitude},${_currentPosition!.longitude}:${_destinationPoint!.latitude},${_destinationPoint!.longitude}/json', {
+        'key': _tomTomApiKey,
+        'instructionsType': 'text',
+        'language': 'fr-FR',
+        'routeType': 'fastest',
+        'traffic': 'true',
+        'travelMode': 'car',
+      });
+
+      print('URL TomTom: $uri');
+
+      final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
-        if (data['routes'] != null && data['routes'].isNotEmpty) {
-          String polyline = data['routes'][0]['geometry'];
-          List<LatLng> segmentRoute = _decodePolyline(polyline);
-          fullRoute.addAll(segmentRoute);
-
-          // Extract instructions
-          var steps = data['routes'][0]['legs'][0]['steps'];
-          for (var step in steps) {
-            instructions.add(step['maneuver']['instruction']);
-          }
-        } else {
-          print('Erreur: Pas de routes trouvées');
-        }
         
-        await Future.delayed(Duration(milliseconds: 500));
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          var route = data['routes'][0];
+          List<LatLng> points = [];
+          List<String> newInstructions = [];
+
+          for (var point in route['legs'][0]['points']) {
+            points.add(LatLng(
+              point['latitude'].toDouble(),
+              point['longitude'].toDouble(),
+            ));
+          }
+
+          for (var instruction in route['guidance']['instructions']) {
+            newInstructions.add(instruction['message']);
+          }
+
+          if (mounted) {
+            setState(() {
+              _routePoints = points;
+              _instructions = newInstructions;
+            });
+            _fitBounds();
+          }
+        }
       } else {
-        print('Erreur lors de la récupération de l\'itinéraire: ${response.body}');
+        print("Erreur API TomTom: ${response.statusCode}");
+        print("Response: ${response.body}");
       }
     } catch (e) {
-      print('Erreur lors de la génération du segment ${i}: $e');
+      print('Erreur lors de la génération de l\'itinéraire: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingRoute = false;
+        });
+      }
     }
-  }
-
-  setState(() {
-    _routePoints = fullRoute;
-    _instructions = instructions;
-  });
-  
-  _fitBounds();
-}
-
-  List<LatLng> _decodePolyline(String encoded) {
-  List<LatLng> points = [];
-  int index = 0;
-  int len = encoded.length;
-  int lat = 0;
-  int lng = 0;
-
-  while (index < len) {
-    int b;
-    int shift = 0;
-    int result = 0;
-    do {
-      b = encoded.codeUnitAt(index++) - 63;
-      result |= (b & 0x1F) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-    lat += dlat;
-
-    shift = 0;
-    result = 0;
-    do {
-      b = encoded.codeUnitAt(index++) - 63;
-      result |= (b & 0x1F) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-    lng += dlng;
-
-    points.add(LatLng(lat / 1E5, lng / 1E5));
-  }
-  return points;
   }
 
   void _fitBounds() {
@@ -290,12 +308,19 @@ class _TourMapScreenState extends State<TourMapScreen> {
     double minLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
     double maxLng = _routePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
 
+    double padding = 0.1;
     LatLngBounds bounds = LatLngBounds(
-      LatLng(minLat, minLng),
-      LatLng(maxLat, maxLng),
+      LatLng(minLat - padding, minLng - padding),
+      LatLng(maxLat + padding, maxLng + padding),
     );
 
-    _mapController.fitBounds(bounds, options: FitBoundsOptions(padding: EdgeInsets.all(50)));
+    _mapController.fitBounds(
+      bounds,
+      options: FitBoundsOptions(
+        padding: EdgeInsets.all(50.0),
+        maxZoom: 15.0,
+      ),
+    );
   }
 
   @override
@@ -303,90 +328,77 @@ class _TourMapScreenState extends State<TourMapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Itinéraire de Livraison'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _generateTomTomRoute,
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : Column(
               children: [
                 Expanded(
+                  flex: 2,
                   child: FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      center: _center ?? LatLng(48.8566, 2.3522), // Paris par défaut
-                      zoom: 10.0,
+                      center: _center ?? LatLng(48.8566, 2.3522),
+                      zoom: 13.0,
                       maxZoom: 18.0,
-                      interactiveFlags: InteractiveFlag.all, // Permettre l'interaction avec la carte
+                      interactiveFlags: InteractiveFlag.all,
                     ),
                     children: [
                       TileLayer(
                         urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
                         subdomains: ['a', 'b', 'c'],
                       ),
-                      MarkerLayer(
-                        markers: _markers,
-                      ),
                       PolylineLayer(
                         polylines: [
                           Polyline(
                             points: _routePoints,
                             color: Colors.blue,
-                            strokeWidth: 5,
+                            strokeWidth: 4.0,
                           ),
                         ],
+                      ),
+                      MarkerLayer(
+                        markers: _markers,
                       ),
                     ],
                   ),
                 ),
                 if (_instructions.isNotEmpty)
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: _instructions.length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          title: Text(_instructions[index]),
-                        );
-                      },
+                    flex: 1,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 5,
+                            offset: Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: ListView.builder(
+                        itemCount: _instructions.length,
+                        itemBuilder: (context, index) {
+                          return ListTile(
+                            leading: Icon(Icons.directions),
+                            title: Text(
+                              _instructions[index],
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
               ],
             ),
     );
   }
-}
-
-class TileLayerOptions {
-  final String urlTemplate;
-  final List<String> subdomains;
-  
-  TileLayerOptions({required this.urlTemplate, required this.subdomains});
-}
-
-
-extension on MapController {
-  void fitBounds(LatLngBounds latLngBounds) {
-    // Ici tu peux mettre la logique pour ajuster la vue sur les bornes
-    // Par exemple, tu peux utiliser des méthodes pour adapter la carte aux coordonnées.
-  }
-}
-
-class MarkerLayerOptions {
-  final List<Marker> markers;
-  
-  MarkerLayerOptions({required this.markers});
-}
-
-class PolylineLayerOptions {
-  final List<Polyline> polylines;
-
-  PolylineLayerOptions({required this.polylines});
-}
-// Removed custom Polyline class to avoid conflict with flutter_map's Polyline class
-
-
-class layers{
-  final List<TileLayerOptions> TileLayer;
-  final List<MarkerLayerOptions> MarkerLayer;
-  final List<PolylineLayerOptions> PolylineLayer;
-
-  layers({required this.TileLayer, required this.MarkerLayer, required this.PolylineLayer});
 }
