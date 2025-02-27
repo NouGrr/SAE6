@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sae_cocagne_mobile/client.dart';
-import 'package:sae_cocagne_mobile/delivery/app_state.dart';
-import 'package:sae_cocagne_mobile/delivery/delivery.dart';
+import '/client.dart';
+import 'delivery/app_state.dart';
+import '/delivery/delivery.dart';
 
 void main() {
   runApp(
